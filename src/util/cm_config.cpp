@@ -1,5 +1,5 @@
-#include "ConfigFileParser.h"
-#include "sb_string.h"
+#include "util/cm_config.h"
+#include "util/cm_string.h"
 #include <string.h>
 
 
@@ -128,7 +128,7 @@ int  CM_ConfigFileParser::ParseLine(char* line)
 		return -1;
 	}
 	
-	char * pstart=trimall(line);
+	char * pstart=CM_String::trimall(line);
 	if (NULL==pstart)
 	{
 		return -1;

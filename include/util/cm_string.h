@@ -9,8 +9,10 @@ using namespace std;
 
 class CM_String
 {
+public:
 	static char* trimall(char* line);
 	static char* trimlr(char* line);
+	static char* trimleftright(char* line);
 	static char* tolower(char* _s);
 	static char* touper(char* _s);
 	static string strtolower(const string &str);
