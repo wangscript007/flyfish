@@ -21,9 +21,9 @@ char* CM_String::trimall(char* line)
 
 		if ((*start_pos!=' ') && (*start_pos!='\t') )
 		{
-			lastline[i]=*start_pos;
+			lastline[i++]=*start_pos;
 		}		
-		i++;
+		
 		start_pos++;
 
 		if (i>=256)
@@ -45,14 +45,20 @@ char* CM_String::trimall(char* line)
 }
 
 
-//去掉行中头和尾的空格
+//去掉行中头和尾的空格和行尾的换行符
 char* CM_String::trimleftright(char* line)
 {
 	char        *Tail, *Head;
 
 	for ( Tail = line + strlen( line ) - 1; Tail >= line; Tail -- )
 	{
-		if ( !ISSPACE( *Tail ) )
+		if (ISEOF( *Tail )||ISSPACE( *Tail ) )
+		{
+			*Tail=0;
+			continue;
+		}
+			
+		if ( !ISSPACE( *Tail )  )
 			break;
 	}
 		
@@ -93,7 +99,11 @@ char* CM_String::trimlr(char* _s)
 	end = _s + len - 1;
 
 	/* Remove trailing spaces and tabs */
-	while (ISSPACE(*end)) end--;
+	while (ISSPACE(*end)||ISEOF(*end)) 
+	{
+		*end=0;
+		end--;
+	}
 	if (end != (_s + len - 1)) 
 	{
 		*(end+1) = '\0';

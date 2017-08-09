@@ -1,7 +1,8 @@
 #include "util/cm_config.h"
 #include "util/cm_string.h"
 #include <string.h>
-
+#include <iostream>
+using namespace std;
 
 CM_ConfigFileParser::CM_ConfigFileParser(const char * fileName)
 {
@@ -15,16 +16,7 @@ CM_ConfigFileParser::CM_ConfigFileParser(const char * fileName)
 
 CM_ConfigFileParser::~CM_ConfigFileParser()
 {
-	if (m_mapFileSection.size()>0)
-	{
-		for (auto &tSection:m_mapFileSection)
-		{
-			if (tSection.second)
-			{
-				delete tSection.second;
-			}
-		}
-	}
+
 
 }
 
@@ -74,22 +66,15 @@ int CM_ConfigFileParser::LoadFile()
 
 }
 
-map<string,string> * CM_ConfigFileParser::GetSection(const char *secname)
+map<string,string>  CM_ConfigFileParser::GetSection(const char *secname)
 {
-	if (NULL==secname)
-	{
-		return NULL;
-	}
-
 	SectionMap::iterator  it=m_mapFileSection.find(string(secname));
 	if (it!=m_mapFileSection.end())
 	{
 		return it->second;
 	}
-	else
-	{
-		return NULL;
-	}
+
+	return map<string,string> ();
 
 }
 
@@ -100,15 +85,28 @@ string CM_ConfigFileParser::GetValue(const char *secname,const char *keyname)
 		return string("");
 	}
 
-	map<string,string> *mapSection=GetSection(secname);
+	map<string,string> mapSection=GetSection(secname);
 
-	if (NULL==mapSection)
+#if 0
+
+
+	if (strcmp(keyname,"endpoint")==0)
+	{
+		for (auto item:mapSection)
+		{
+			cout<<item.first<< "|"<<item.second <<"|"<<endl;
+		}
+	}
+	
+#endif
+
+	if (mapSection.empty())
 	{
 		return string("");
 	}
 
-	map<string,string>::iterator it=mapSection->find(string(keyname));
-	if (it!=mapSection->end())
+	map<string,string>::iterator it=mapSection.find(string(keyname));
+	if (it!=mapSection.end())
 	{
 		return it->second;
 	}
@@ -127,8 +125,9 @@ int  CM_ConfigFileParser::ParseLine(char* line)
 	{
 		return -1;
 	}
-	
-	char * pstart=CM_String::trimall(line);
+
+	char * pstart=CM_String::trimleftright(line);
+
 	if (NULL==pstart)
 	{
 		return -1;
@@ -174,17 +173,23 @@ int  CM_ConfigFileParser::ParseLine(char* line)
 		//char *pk=TrimSpace(pKey+1);
 		strncpy(value,pKey+1,strlen(pKey+1));
 
+		const char *trimkey=CM_String::trimall(key);
+		const char *trimvalue=CM_String::trimleftright(value);
+
 		SectionMap::iterator it=m_mapFileSection.find(m_sCurrentSectionName);
 		if (it!=m_mapFileSection.end())
 		{
-			(*(it->second))[string(key)]=string(value);
+			((it->second))[string(trimkey)]=string(trimvalue);
+#if 0
+			printf("m_sCurrentSectionName=%s,trimkey=%s,trimvalue=%s\n",m_sCurrentSectionName.c_str(),trimkey,trimvalue);
+#endif
+			
 		}
 		else
 		{
-			map<string ,string > *mapKeyValue =new map<string ,string > ;
-			(*mapKeyValue)[string(key)]=string(value);
 
-			m_mapFileSection.insert(make_pair(m_sCurrentSectionName,mapKeyValue));
+			m_mapFileSection[m_sCurrentSectionName].insert(make_pair(string(trimkey),string(trimvalue)));
+			
 		}
 		
 		
