@@ -145,8 +145,10 @@ void TC_EpollServer::Handle::setWaitTime(uint32_t iWaitTime)
 
 void TC_EpollServer::Handle::handleImp()
 {
-    startHandle();
+	setWaitTime(1000);
 
+    startHandle();
+	
     while (!getEpollServer()->isTerminate())
     {
         {
@@ -168,30 +170,32 @@ void TC_EpollServer::Handle::handleImp()
 
         tagRecvData* recv = NULL;
 
-        map<string, BindAdapterPtr>& adapters = _handleGroup->adapters;
+        map<string, BindAdapterPtr> &adapters = _handleGroup->adapters;
 
         for (map<string, BindAdapterPtr>::iterator it = adapters.begin(); it != adapters.end(); ++it)
         {
-            BindAdapterPtr& adapter = it->second;
-
+			cout <<__FILE__LINE__<< "|it->second->use_count=" <<it->second.use_count()<<",pthread_self()="<<pthread_self()<<",_iWaitTime="<<_iWaitTime << endl;
+            BindAdapterPtr &adapter = it->second;
+			cout <<__FILE__LINE__<< "|adapter->use_count=" <<adapter.use_count()<<"|it->second->use_count=" <<it->second.use_count()<<",pthread_self()="<<pthread_self()<<",_iWaitTime="<<_iWaitTime << endl;
+			
             try
             {
-
                 while (adapter->waitForRecvQueue(recv, 0))
                 {
+					cout <<__FILE__LINE__<< "|after waitForRecvQueue" <<",pthread_self()="<<pthread_self() << endl;
                     //上报心跳
                     heartbeat();
-
                     //为了实现所有主逻辑的单线程化,在每次循环中给业务处理自有消息的机会
                     handleAsyncResponse();
-
                     tagRecvData& stRecvData = *recv;
-
                     int64_t now = TNOWMS;
+					cout <<__FILE__LINE__<< "|adapter addr="<<adapter.get()<<endl;
+					cout <<__FILE__LINE__<< "|before =,stRecvData.adapter->use_count=" <<stRecvData.adapter.use_count()<<",pthread_self()="<<pthread_self() << endl;
+					cout <<__FILE__LINE__<< "|before =,adapter.use_count()=" <<adapter.use_count()<<",pthread_self()="<<pthread_self() << endl;
+                    stRecvData.adapter = adapter;//这里要小心，跟NetThread::delConnection里面的adapter用的是同一个,赋值动作使stRecvData.adapter引用数减一(stRecvData.adapter引用数不能为一),
 
-
-                    stRecvData.adapter = adapter;
-
+					cout <<__FILE__LINE__<< "|adapter->use_count=" <<adapter.use_count()<<",pthread_self()="<<pthread_self() << endl;
+					cout <<__FILE__LINE__<< "|stRecvData.adapter->use_count=" <<stRecvData.adapter.use_count()<<",pthread_self()="<<pthread_self() << endl;
                     //数据已超载 overload
                     if (stRecvData.isOverload)
                     {
@@ -211,9 +215,9 @@ void TC_EpollServer::Handle::handleImp()
                     {
                         handle(stRecvData);
                     }
-                     handleCustomMessage(false);
+                    handleCustomMessage(false);
 
-                    delete recv;
+                    delete recv;//tagRecvData 是new的，TC_EpollServer::NetThread::Connection::parseProtocol 或者TC_EpollServer::NetThread::delConnection
                     recv = NULL;
                 }
             }
@@ -226,7 +230,7 @@ void TC_EpollServer::Handle::handleImp()
                     recv = NULL;
                 }
 
-                getEpollServer()->error("[Handle::handleImp] error:" + string(ex.what()));
+                getEpollServer()->error("[Handle::handleImp] exception error:" + string(ex.what()));
             }
             catch (...)
             {
@@ -272,9 +276,14 @@ TC_EpollServer::BindAdapter::BindAdapter(TC_EpollServer *pEpollServer)
 TC_EpollServer::BindAdapter::~BindAdapter()
 {
     //adapter析够的时候, 服务要退出
+	cout<<"int ~BindAdapter(),pthread_self()="<<pthread_self()<<endl;
     _pEpollServer->terminate();
-}
 
+}
+shared_ptr<TC_EpollServer::BindAdapter> TC_EpollServer::BindAdapter::get()
+{
+	return shared_from_this();
+}
 void TC_EpollServer::BindAdapter::setProtocolName(const string& name)
 {
     TC_ThreadLock::Lock lock(*this);
@@ -287,9 +296,9 @@ const string& TC_EpollServer::BindAdapter::getProtocolName()
     return _protocolName;
 }
 
-bool TC_EpollServer::BindAdapter::isTarsProtocol()
+bool TC_EpollServer::BindAdapter::isTafProtocol()
 {
-    return (_protocolName == "tars");
+    return (_protocolName == "taf");
 }
 
 bool TC_EpollServer::BindAdapter::isIpAllow(const string& ip) const
@@ -343,8 +352,9 @@ bool TC_EpollServer::BindAdapter::waitForRecvQueue(tagRecvData* &recv, uint32_t 
 {
     bool bRet = false;
 
-    bRet = _rbuffer.pop_front(recv, iWaitTime);
-
+	bRet = _rbuffer.pop_front(recv, iWaitTime);
+   
+	cout<<"waitForRecvQueue,bRet="<<bRet<<endl;
     if(!bRet)
     {
         return bRet;
@@ -734,6 +744,7 @@ int TC_EpollServer::NetThread::Connection::parseProtocol(recv_queue::queue_type 
             //需要过滤首包包头
             if(_iHeaderLen > 0)
             {
+				
                 if(_recvbuffer.length() >= (unsigned) _iHeaderLen)
                 {
                     string header = _recvbuffer.substr(0, _iHeaderLen);
@@ -750,6 +761,8 @@ int TC_EpollServer::NetThread::Connection::parseProtocol(recv_queue::queue_type 
                 }
             }
 
+			cout<<"_iHeaderLen="<<_iHeaderLen<<endl;
+
             string ro;
 
             int b = _pBindAdapter->getProtocol()(_recvbuffer, ro);
@@ -757,12 +770,15 @@ int TC_EpollServer::NetThread::Connection::parseProtocol(recv_queue::queue_type 
             if(b == TC_EpollServer::PACKET_LESS)
             {
                 //包不完全
+				cout<<"TC_EpollServer::PACKET_LESS"<<endl;
                 break;
             }
             else if(b == TC_EpollServer::PACKET_FULL)
             {
+				cout<<"TC_EpollServer::PACKET_FULL"<<endl;
                 tagRecvData* recv = new tagRecvData();
-                recv->buffer           = ro;
+                //shared_ptr<tagRecvData >  recv = std::make_shared<tagRecvData>();
+				recv->buffer           = ro;
                 recv->ip               = _ip;
                 recv->port             = _port;
                 recv->recvTimeStamp    = TNOWMS;
@@ -1622,9 +1638,12 @@ void TC_EpollServer::NetThread::delConnection(TC_EpollServer::NetThread::Connect
         uint32_t uid = cPtr->getId();
 
         //构造一个tagRecvData，通知业务该连接的关闭事件
-
+		cout<<"uid = "<<uid<<" is closed"<<endl;
         tagRecvData* recv = new tagRecvData();
-        recv->adapter    = (shared_ptr<BindAdapter>) cPtr->getBindAdapter();
+        //recv->adapter    = (shared_ptr<BindAdapter>) cPtr->getBindAdapter();//recv->adapter->use_count()=1
+        recv->adapter    = cPtr->getBindAdapter()->get();
+		cout <<__FILE__LINE__<< "|adapter addr="<<cPtr->getBindAdapter()<<endl;
+		cout<<"recv->adapter->use_count() = "<<recv->adapter.use_count()<<",(shared_ptr<BindAdapter>) cPtr->getBindAdapter()"<<endl;//<<((shared_ptr<BindAdapter>) cPtr->getBindAdapter()).use_count() <<endl; 这里不能产生临时对象打印，否则会析构掉 cPtr->getBindAdapter
         recv->uid        =  uid;
         recv->ip         = cPtr->getIp();
         recv->port       = cPtr->getPort();
@@ -1786,8 +1805,9 @@ void TC_EpollServer::NetThread::processNet(const epoll_event &ev)
 
         if(ret < 0)
         {
+			cout<<"CLIENT_CLOSE"<<endl;
             delConnection(cPtr,true,EM_CLIENT_CLOSE);
-
+			cout<<"after delConnection!!!"<<endl;
             return;
         }
 
@@ -1857,7 +1877,9 @@ void TC_EpollServer::NetThread::run()
                     break;
                 case ET_NET:
                     //网络请求
+					cout<<"before processNet"<<",pthread_self()="<<pthread_self()<<endl;
                     processNet(ev);
+					cout<<"after processNet"<<",pthread_self()="<<pthread_self()<<endl;
                     break;
                 default:
                     assert(true);
@@ -1867,7 +1889,10 @@ void TC_EpollServer::NetThread::run()
             {
                 error("run exception:" + string(ex.what()));
             }
+
+			cout<<"i="<<i<<endl;
         }
+
     }
 }
 size_t TC_EpollServer::NetThread::getSendRspSize()
@@ -2080,6 +2105,8 @@ void TC_EpollServer::send(unsigned int uid, const string &s, const string &ip, u
     netThread->send(uid, s, ip, port);
 }
 
+
+
 void TC_EpollServer::debug(const string &s)
 {
     if(_pLocalLogger)
@@ -2087,6 +2114,7 @@ void TC_EpollServer::debug(const string &s)
         _pLocalLogger->debug() << "[TAF]" << s << endl;
     }
 }
+
 
 void TC_EpollServer::info(const string &s)
 {
@@ -2103,6 +2131,7 @@ void TC_EpollServer::error(const string &s)
         _pLocalLogger->error() << "[TAF]" << s << endl;
     }
 }
+
 
 vector<TC_EpollServer::ConnStatus> TC_EpollServer::getConnStatus(int lfd)
 {

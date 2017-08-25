@@ -11,6 +11,7 @@ typedef  map<string,map<string,string>>  SectionMap;
 class CM_ConfigFileParser
 {
 public:
+	CM_ConfigFileParser(){};
 	CM_ConfigFileParser(const char * fileName);
 	~CM_ConfigFileParser();
 

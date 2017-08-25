@@ -29,9 +29,11 @@
 #include "util/tc_clientsocket.h"
 #include "util/tc_functor.h"
 #include "util/tc_thread_queue.h"
+#include <fstream>
+#include "util/tc_singleton.h"
 //#include "util/tc_logger.h"
 //#include "util/tc_shm.h"
-//#include "util/tc_common.h"
+#include "util/tc_common.h"
 //#include "util/tc_mem_queue.h"
 //#include "util/tc_squeue.h"
 //#include "util/tc_mmap.h"
@@ -330,7 +332,7 @@ public:
     };
     ////////////////////////////////////////////////////////////////////////////
     // 服务端口管理,监听socket信息
-    class BindAdapter : public TC_ThreadLock
+    class BindAdapter : public TC_ThreadLock,public std::enable_shared_from_this<BindAdapter>
     {
     public:
         /**
@@ -370,6 +372,7 @@ public:
          */
         ~BindAdapter();
 
+		shared_ptr<BindAdapter> get();
         /**
          * 设置adapter name
          * @param name
@@ -410,7 +413,7 @@ public:
          * 是否tars协议
          * @return bool
          */
-        bool isTarsProtocol();
+        bool isTafProtocol();
 
         /**
          * 判断是否需要过载保护
@@ -654,7 +657,7 @@ public:
          */
         void setHandle(BindAdapterPtr& otherAdapter)
         {
-            _pEpollServer->setHandleGroup(otherAdapter->getHandleGroupName(), (shared_ptr<BindAdapter>)this);
+            _pEpollServer->setHandleGroup(otherAdapter->getHandleGroupName(), (BindAdapterPtr)get());
         }
 
         /**
@@ -662,7 +665,7 @@ public:
          */
         template<typename T> void setHandle()
         {
-            _pEpollServer->setHandleGroup<T>(_handleGroupName, _iHandleNum, this);
+            _pEpollServer->setHandleGroup<T>(_handleGroupName, _iHandleNum, (BindAdapterPtr)get());
         }
 
         /**
@@ -1268,6 +1271,7 @@ public:
          */
         void debug(const string &s);
 
+
         /**
          * INFO日志
          * @param s
@@ -1280,6 +1284,7 @@ public:
          */
         void error(const string &s);
 
+		
         /**
          * 是否启用防止空链接攻击的机制
          * @param bEnable
@@ -1500,22 +1505,29 @@ public:
     ////////////////////////////////////////////////////////////////////////////
 
 	////////////////////////////////////////////////////////////////////////////
-	class RollWrapperInterface
+	class RollWrapperInterface:public TC_Singleton<RollWrapperInterface, CreateUsingNew, PhoneixLifetime>
 	{
 	public:
-		ostream & debug()
+		//RollWrapperInterface(std::string filename){ _logfile.open(filename.c_str());}
+		~RollWrapperInterface(){_logfile.close();}
+		void init(std::string filename){ _logfile.open(filename.c_str());}
+		ofstream & debug()
 		{
-			return os<<"debug:";
+			_logfile<<TC_Common::now2str()<<"|debug|";
+			return _logfile;
 		}
-		ostream & info()
+		ofstream & info()
 		{
-			return os<<"info:";
+			_logfile<<TC_Common::now2str()<<"|info|";
+			return _logfile;
 		}
-		ostream & error()
+		ofstream & error()
 		{
-			return os<<"error:";
+			_logfile<<TC_Common::now2str()<<"|error|";
+			return _logfile;
 		}
-		ostream os;
+	public:
+		ofstream _logfile;
 	};
 	////////////////////////////////////////////////////////////////////////////
 public:
@@ -1574,7 +1586,7 @@ public:
 
         if (it == _handleGroups.end())
         {
-            HandleGroupPtr hg = new HandleGroup();
+            HandleGroupPtr hg = std::make_shared<HandleGroup>();//new HandleGroup();
 
             hg->name = groupName;
 
@@ -1582,7 +1594,7 @@ public:
 
             for (int32_t i = 0; i < handleNum; ++i)
             {
-                HandlePtr handle = new T();
+                HandlePtr handle = std::make_shared<T>();//new T();
 
                 handle->setEpollServer(this);
 
@@ -1595,9 +1607,13 @@ public:
 
             it = _handleGroups.find(groupName);
         }
+		cout <<__FILE__LINE__<< "|adapter->use_count=" <<adapter.use_count()<<",pthread_self()="<<pthread_self() << endl;
+		
         it->second->adapters[adapter->getName()] = adapter;
+		cout <<__FILE__LINE__<< "|adapter->use_count=" <<adapter.use_count()<<",pthread_self()="<<pthread_self() << endl;
 
-        adapter->_handleGroup = it->second;
+
+		adapter->_handleGroup = it->second;
     }
 
     /**
@@ -1768,6 +1784,10 @@ private:
     map<string, HandleGroupPtr> _handleGroups;
 };
 typedef shared_ptr<TC_EpollServer> TC_EpollServerPtr;
+
+#define LOGDEBUG(msg)  do{  TC_EpollServer::RollWrapperInterface::getInstance()->debug() <<__FILE__LINE__<<"|"<<__FUNCTION__<<"|" <<msg; }while(0)
+#define LOGINFO(msg)   do{  TC_EpollServer::RollWrapperInterface::getInstance()->info() <<__FILE__LINE__<<"|"<<__FUNCTION__<<"|" <<msg; }while(0)
+#define LOGERROR(msg)  do{  TC_EpollServer::RollWrapperInterface::getInstance()->error() <<__FILE__LINE__<<"|"<<__FUNCTION__<<"|" <<msg; }while(0)
 }
 
 #endif

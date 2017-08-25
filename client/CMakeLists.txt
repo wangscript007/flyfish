@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
-project(HelloServer)
+project(HelloClient)
 
 set(CMAKE_VERBOSE_MAKEFILE on)
 set(CMAKE_CXX_COMPILER "g++")
@@ -15,12 +15,6 @@ aux_source_directory(./  BASE_SRC_LIST)
 list(APPEND SRC_LIST ${BASE_SRC_LIST}  )
 
 include_directories(./)
-include_directories(${PROJECT_SOURCE_DIR}/../../include)
 
+add_executable(HelloClient ${SRC_LIST})
 
-
-link_directories(${PROJECT_SOURCE_DIR}/../../lib)
-
-
-add_executable(HelloServer ${SRC_LIST})
-target_link_libraries(HelloServer libflyfish.a  -lpthread)

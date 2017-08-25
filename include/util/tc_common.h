@@ -45,6 +45,8 @@
 
 using namespace std;
 
+#define __FILE__LINE__ (string(__FILE__) + string("(") + TC_Common::tostr<int>(__LINE__) + string(")"))
+
 namespace taf
 {
 /////////////////////////////////////////////////
