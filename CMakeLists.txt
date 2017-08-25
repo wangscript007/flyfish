@@ -13,6 +13,10 @@ message(STATUS "optional:-g -std=c++0x -Wno-deprecated -Wall -fPIC")
 	  src/util/tc_epoller.cpp
 	  src/util/tc_clientsocket.cpp
 	  src/util/tc_epoll_server.cpp
+	  src/util/JceCurrent.cpp
+	  src/util/Servant.cpp
+	  src/util/ServantHelper.cpp
+	  src/util/ServantHandle.cpp
       )   
 INCLUDE_DIRECTORIES(include) 
 
